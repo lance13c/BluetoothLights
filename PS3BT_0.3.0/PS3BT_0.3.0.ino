@@ -52,6 +52,44 @@ int tempRGB[] = {0, 0, 0};
 float initCtrlAngle = -1.0;       // Init angle for Controller Roll and Pitch 
 int tempCount = 0;
 
+// MOOD LIGHT VARS
+int colorIndex = 0;
+const int COLOR_MAX_INDEX = 13;
+int requestColorChange = true;                          // TODO FIGURE OUT MOOD LIGHTS
+int tColorR = 0;  // Transitioning Color RED
+int tColorG = 0;  // Transitioning Color GREEN
+int tColorB = 0;  // Transitioning Color BLUE
+int colorTransitionTime = 10;  // Arbitray number, used for mapping color difference values
+                               // EX: tColorG = 10, colorG = 40, 40-10 = 30, Map(val,0,30,0,10)
+int colorMap[COLOR_MAX_INDEX][3] = {
+  {252,5,0},    // 0
+  {245,97,1},   // 1
+  {239,146,0},  // 2
+  {254,240,5},  // 3
+  {178,237,1},  // 4
+  {19,227,1},   // 5
+  {7,218,140},  // 6
+  {0,236,220},  // 7
+  {1,145,206},  // 8
+  {2,55,211},   // 9
+  {79,12,118},  // 10
+  {113,12,83},  // 11
+  {157,5,26}};  // 12
+
+#define C_RED 0
+#define C_ORANGE_RED 1
+#define C_ORANGE 2
+#define C_YELLOW 3
+#define C_YELLOW_GREEN 4
+#define C_GREEN 5
+#define C_GREEN_AQUA 6
+#define C_AQUA 7
+#define C_AQUA_BLUE 8
+#define C_BLUE 9
+#define C_PURPLE 10
+#define C_PURPLE_RED 11
+#define C_BLOOD_RED 12
+
 #define TEST_R_PIN 44
 #define TEST_G_PIN 46
 #define TEST_B_PIN 45
@@ -299,6 +337,12 @@ void toggleEffect(String effect) {
     effectMap[ADJUST_BRIGHTNESS] = (val) ? false : true;
     Serial.print("ADJUST_BRIGHTNESS TOGGLE: ");
     Serial.println(val);
+  } else if (effect == "MOOD"){
+    setInitCtrlAngle();
+    val = effectMap[MOOD];
+    effectMap[MOOD] = (val) ? false : true;
+    Serial.print("ADJUST_BRIGHTNESS TOGGLE: ");
+    Serial.println(val);
   } else {
     Serial.println("Effect Not Found: " + effect); 
   }
@@ -411,6 +455,22 @@ void setTempColorToCurrent() {
 }
 
 void purple() {
+  
+}
+
+void moodLights() {
+  if (colorIndex > COLOR_MAX_INDEX){
+    colorIndex = 0;
+  }
+  int currentColorR = colorMap[colorIndex][0];
+  int currentColorG = colorMap[colorIndex][1];
+  int currentColorB = colorMap[colorIndex][2];
+
+  int rDiff = currentRGB[0] - currentColorR;
+  
+}
+
+void initMoodLights() {
   
 }
 
