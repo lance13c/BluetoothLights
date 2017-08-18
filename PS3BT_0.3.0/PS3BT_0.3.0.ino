@@ -47,10 +47,14 @@ bool lightToggle;
 bool strobeToggle;              // Wheather to strobe
 bool strobeValue;               // If off or on
 String device;                  // Either "TEST" or "CTRL"  (Stands for testing or controller)
-int currentRGB[] = {0, 0, 0};     // Array of rgb values to be set only when
+int masterRGB[] = {0, 0, 0};      // The actual color being represented;
+int currentRGB[] = {0, 0, 0};     // The color actually being displayed with all augments
 int tempRGB[] = {0, 0, 0};
 float initCtrlAngle = -1.0;       // Init angle for Controller Roll and Pitch 
 int tempCount = 0;
+
+float brightnessMul = 1.0;      // Brightness Multiplier
+float tempBrightnessMul = brightnessMul;  // Temp brightness multiplyer for brightness changes;
 
 // MOOD LIGHT VARS
 int colorIndex = 0;
@@ -139,7 +143,8 @@ void setup() {
 
   //END TEST AREA
 
-  
+  purple();
+  //setRGB(device, 200, 200, 200, false, false);
 #if !defined(__MIPSEL__)
   while (!Serial); // Wait for serial port to connect - used on Leonardo, Teensy and other boards with built-in USB CDC serial connection
 #endif
@@ -369,28 +374,35 @@ void toggleFeature(String feature) {
  */
 String blackOut(boolean toggle) {
   if (toggle) {
-    tempRGB[0] = currentRGB[0];
-    tempRGB[1] = currentRGB[1];
-    tempRGB[2] = currentRGB[2];
-    setRGB(device, false, 0, 0, 0);
+    tempRGB[0] = masterRGB[0];
+    tempRGB[1] = masterRGB[1];
+    tempRGB[2] = masterRGB[2];
+    setRGB(device, 0, 0, 0, false, false);
     lightLockEnable = true;
     return "Blackout true";
   } else {
-    setRGB(device, true, tempRGB[0], tempRGB[1], tempRGB[2]);
+    setRGB(device, tempRGB[0], tempRGB[1], tempRGB[2], true, false);
     lightLockEnable = false;
     return "Blackout false";
   }
 }
 
-String setRGB(String device, boolean overrideLock, int r, int g, int b){
+String setRGB(String device, int r, int g, int b, boolean overrideLock, boolean overrideBrightness){
+  float localBrightness = (!overrideBrightness) ? brightnessMul : 1.0;
+  float localR = r * localBrightness;
+  float localG = g * localBrightness;
+  float localB = b * localBrightness;
+  //Serial.print("Brightness: ");
+  //Serial.println(localBrightness);
+
+  
   if (!lightLockEnable || overrideLock) {
-    currentRGB[0] = r;
-    currentRGB[1] = g;
-    currentRGB[2] = b;
+    setMasterRGB(r, g, b);
+    setCurrentRGB((int)localR, (int)localG, (int)localB);
     if (device == DEVICE_TEST) {
-      analogWrite(TEST_R_PIN, r);
-      analogWrite(TEST_G_PIN, g);
-      analogWrite(TEST_B_PIN, b);
+      analogWrite(TEST_R_PIN, (int)localR);
+      analogWrite(TEST_G_PIN, (int)localG);
+      analogWrite(TEST_B_PIN, (int)localB);
       return "Device Test";
     } else if (device == DEVICE_CTRL) {
       return "Device Ctrl";
@@ -412,6 +424,18 @@ void adjustBrightness(){
   int near = diff % 4;
   diff -= near;
   diff = diff;
+
+  float scaledDiff = diff * 0.01;
+
+  // Change global brightness multiplyer
+  float newBrightness = (tempBrightnessMul + scaledDiff);
+  if (newBrightness > 1.0) {newBrightness = 1.0;}
+  if (newBrightness < 0.0) {newBrightness = 0.0;}
+  Serial.print("New Brightness");
+  Serial.println(newBrightness);
+  brightnessMul = newBrightness;
+
+  
   // End of smoothing
   
 //  Serial.print("DIFF VALUE: ");
@@ -420,22 +444,22 @@ void adjustBrightness(){
 //  Serial.println("RED VALUE BEFORE: ");
 //  Serial.print(currentRGB[0]);
 //  Serial.print("\n");
-  int r = (diff + tempRGB[0]);
-  int g = (diff + tempRGB[1]);
-  int b = (diff + tempRGB[2]);
-
-  if (r >= 255) {r = 255;}
-  if (g >= 255) {g = 255;}
-  if (b >= 255) {b = 255;}
-
-  if (r <= 0) {r = 0;}
-  if (g <= 0) {g = 0;}
-  if (b <= 0) {b = 0;}
-
-  setRGB(device, false, r, g, b);
-  Serial.print("RED VALUE: ");
-  Serial.print(r);
-  Serial.print("\n");
+  int r = (tempRGB[0]);
+  int g = (tempRGB[1]);
+  int b = (tempRGB[2]);
+//
+//  if (r >= 255) {r = 255;}
+//  if (g >= 255) {g = 255;}
+//  if (b >= 255) {b = 255;}
+//
+//  if (r <= 0) {r = 0;}
+//  if (g <= 0) {g = 0;}
+//  if (b <= 0) {b = 0;}
+//
+  setRGB(device, r, g, b, true, false);
+//  Serial.print("RED VALUE: ");
+//  Serial.print(r);
+//  Serial.print("\n");
 }
 
 //void adjustBrightnessOnTrigger(int val) {
@@ -444,18 +468,31 @@ void adjustBrightness(){
 // Todo add alternative angle selection
 void setInitCtrlAngle(){
   initCtrlAngle = PS3.getAngle(Roll);
-  setTempColorToCurrent();
+  tempBrightnessMul = brightnessMul;
+  setTempColorToMaster();
   Serial.println("Set Init Ctrl Angle");
 }
 
-void setTempColorToCurrent() {
-  tempRGB[0] = currentRGB[0];
-  tempRGB[1] = currentRGB[1];
-  tempRGB[2] = currentRGB[2];
+void setTempColorToMaster() {
+  tempRGB[0] = masterRGB[0];
+  tempRGB[1] = masterRGB[1];
+  tempRGB[2] = masterRGB[2];
+}
+
+void setMasterRGB(int r, int g, int b){
+  masterRGB[0] = r;
+  masterRGB[1] = g;
+  masterRGB[2] = b;
+}
+
+void setCurrentRGB(int r, int g, int b){
+  currentRGB[0] = r;
+  currentRGB[1] = g;
+  currentRGB[2] = b;
 }
 
 void purple() {
-  
+  setRGB(device, 100, 20, 200, false, false);
 }
 
 void moodLights() {
