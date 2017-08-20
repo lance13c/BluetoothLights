@@ -57,15 +57,17 @@ float brightnessMul = 1.0;      // Brightness Multiplier
 float tempBrightnessMul = brightnessMul;  // Temp brightness multiplyer for brightness changes;
 
 // MOOD LIGHT VARS
+float moodSpeed = 1.0;
+float tempMoodSpeed = moodSpeed;
 int colorIndex = 0;
-const int COLOR_MAX_INDEX = 13;
+const int COLOR_MAX_INDEX = 12;
 int requestColorChange = true;                          // TODO FIGURE OUT MOOD LIGHTS
 int tColorR = 0;  // Transitioning Color RED
 int tColorG = 0;  // Transitioning Color GREEN
 int tColorB = 0;  // Transitioning Color BLUE
 int colorTransitionTime = 10;  // Arbitray number, used for mapping color difference values
                                // EX: tColorG = 10, colorG = 40, 40-10 = 30, Map(val,0,30,0,10)
-int colorMap[COLOR_MAX_INDEX][3] = {
+int colorMap[COLOR_MAX_INDEX + 1][3] = {
   {252,5,0},    // 0
   {245,97,1},   // 1
   {239,146,0},  // 2
@@ -79,6 +81,22 @@ int colorMap[COLOR_MAX_INDEX][3] = {
   {79,12,118},  // 10
   {113,12,83},  // 11
   {157,5,26}};  // 12
+
+int currentMoodColor[3] = {
+  colorMap[colorIndex][0],
+  colorMap[colorIndex][1],
+  colorMap[colorIndex][2]};
+
+int nextMoodColor[3] = {
+  colorMap[colorIndex + 1][0],
+  colorMap[colorIndex + 1][1],
+  colorMap[colorIndex + 1][2]};
+
+float tempMoodColor[3] = {0.0, 0.0, 0.0}; // Current temp mood color
+int diffMoodColor[3] = {0, 0, 0}; // Difference between current and next mood colors
+
+float MAX_MOOD_VALUE = 1000;
+float changeMoodValue = MAX_MOOD_VALUE;
 
 #define C_RED 0
 #define C_ORANGE_RED 1
@@ -143,7 +161,7 @@ void setup() {
 
   //END TEST AREA
 
-  purple();
+  //purple();
   //setRGB(device, 200, 200, 200, false, false);
 #if !defined(__MIPSEL__)
   while (!Serial); // Wait for serial port to connect - used on Leonardo, Teensy and other boards with built-in USB CDC serial connection
@@ -326,10 +344,9 @@ void loop() {
    if (PS3.getButtonPress(CIRCLE)){
       adjustBrightness();
    } // Continue with else ifs
-
-
-    
   }
+  // Test Mood Lights
+   moodLights();
 #endif
 }
 
@@ -496,15 +513,55 @@ void purple() {
 }
 
 void moodLights() {
+  int r = 0;
+  int g = 0;
+  int b = 0;
+
+  if (currentMoodColor[0] >= nextMoodColor[0]) {
+    r = map(changeMoodValue, 0, MAX_MOOD_VALUE, nextMoodColor[0], currentMoodColor[0]);
+    Serial.print("Current Greater Red: ");
+  } else {
+    r = map(changeMoodValue, 0, MAX_MOOD_VALUE, currentMoodColor[0], nextMoodColor[0]);  //c = 10, n = 20  20,19,18   n-c = 10; + n-r
+    r = currentMoodColor[0] + (nextMoodColor[0] - r);
+    Serial.print("Next Greater Red: ");
+  }
+  Serial.println(r);
+
+  setRGB(device, r, g, b, false, false);
+  
+  changeMoodValue -= moodSpeed;
+  if (changeMoodValue <= 0) {
+    moodColorChange();
+    Serial.println("Change Color");
+  }
+}
+
+void moodColorChange() {
+  colorIndex ++;
   if (colorIndex > COLOR_MAX_INDEX){
     colorIndex = 0;
   }
-  int currentColorR = colorMap[colorIndex][0];
-  int currentColorG = colorMap[colorIndex][1];
-  int currentColorB = colorMap[colorIndex][2];
 
-  int rDiff = currentRGB[0] - currentColorR;
+  int nextColorIndex = colorIndex + 1;
+  if (nextColorIndex > COLOR_MAX_INDEX) {nextColorIndex = 0;}
   
+  currentMoodColor[0] = colorMap[colorIndex][0];
+  currentMoodColor[1] = colorMap[colorIndex][1];
+  currentMoodColor[2] = colorMap[colorIndex][2];
+
+  nextMoodColor[0] = colorMap[nextColorIndex][0];
+  nextMoodColor[1] = colorMap[nextColorIndex][1];
+  nextMoodColor[2] = colorMap[nextColorIndex][2];
+
+  diffMoodColor[0] = nextMoodColor[0] - currentMoodColor[0];
+  diffMoodColor[1] = nextMoodColor[1] - currentMoodColor[1];
+  diffMoodColor[2] = nextMoodColor[2] - currentMoodColor[2];
+
+  tempMoodColor[0] = float(diffMoodColor[0]);
+  tempMoodColor[1] = float(diffMoodColor[1]);
+  tempMoodColor[2] = float(diffMoodColor[2]);
+
+  changeMoodValue = MAX_MOOD_VALUE;
 }
 
 void initMoodLights() {
@@ -514,3 +571,11 @@ void initMoodLights() {
 void orange() {
   
 }
+
+// Sets a1 values equal to a2 values
+// src - int[3]
+// src - int[3]
+void copy(int* src, int* dst, int len) {
+    memcpy(dst, src, sizeof(src[0])*len);
+}
+
