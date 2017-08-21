@@ -56,6 +56,22 @@ int tempCount = 0;
 float brightnessMul = 1.0;      // Brightness Multiplier
 float tempBrightnessMul = brightnessMul;  // Temp brightness multiplyer for brightness changes;
 
+// PS3 Bulb
+float BULB_MAX_VALUE = 50;
+float bulbIndex = BULB_MAX_VALUE;
+boolean bulbOn = false;         // Whether the bulb is on or off
+
+// Strobe
+boolean strobeLightOn = false;
+float strobeOnDelay = 20;
+float strobeOffDelay = 280;
+float strobeDelayIndex = strobeOnDelay;
+int STROBE_MAX_BRIGHTNESS = 200;
+
+// ADJUST MOOD
+float globalDiff = 0.0;
+float adjustMoodMul = 30;  // Speed Multiplier for manually adjusting the color
+
 // MOOD LIGHT VARS
 float moodSpeed = 0.5;
 float tempMoodSpeed = moodSpeed;
@@ -92,8 +108,8 @@ int nextMoodColor[3] = {
 
 int diffMoodColor[3] = {0, 0, 0}; // Difference between current and next mood colors
 
-float MAX_MOOD_VALUE = 1500;
-float changeMoodValue = MAX_MOOD_VALUE;
+float MOOD_MAX_VALUE = 1500;
+float changeMoodValue = MOOD_MAX_VALUE;
 
 #define C_RED 0
 #define C_ORANGE_RED 1
@@ -131,7 +147,8 @@ boolean featureMap[] = {false, false};
 #define MOOD 1
 #define ADJUST_BRIGHTNESS 2
 #define MOOD_SPEED 3
-boolean effectMap[] = {false, false, false, false};
+#define ADJUST_MOOD_COLOR 4
+boolean effectMap[] = {false, false, false, false, false};
 
 boolean lightLockEnable = false;          // Determines if the lights are allowed to change.    
 
@@ -286,20 +303,11 @@ void loop() {
       }
       if (PS3.getButtonClick(START)) {
         Serial.print(F("\r\nStart"));
-        printAngle = !printAngle;
+        toggleEffect("STROBE");
       }
       if (PS3.getButtonClick(TRIANGLE)) {
         toggleEffect("MOOD_SPEED");
         Serial.print(F("\r\nTriangle"));
-        PS3.moveSetBulb(Red);
-      }
-      if (PS3.getButtonPress(CIRCLE)) {
-        //strobe();
-        //lightsOff();
-        // TOGGLES THE EFFECT
-        //toggleEffect("ADJUST_BRIGHTNESS");
-        //Serial.print(F("\r\nCircle"));
-        //PS3.moveSetBulb(Green);
       }
       if (PS3.getButtonClick(CIRCLE)) {
         // TOGGLES THE EFFECT
@@ -307,7 +315,7 @@ void loop() {
         //Serial.print(F("\r\nCircle"));
       }
       if (PS3.getButtonClick(SQUARE)) {
-        //orange();
+        toggleFeature("BLACK_OUT");
         Serial.print(F("\r\nSquare"));
         PS3.moveSetBulb(Blue);
       }
@@ -316,10 +324,10 @@ void loop() {
         toggleEffect("MOOD");
       }
       if (PS3.getButtonClick(MOVE)) {        
-        PS3.moveSetBulb(Off);
-        Serial.print(F("\r\nMove"));
-        Serial.print(F(" - "));
-        PS3.printStatusString();
+//        PS3.moveSetBulb(Off);
+//        Serial.print(F("\r\nMove"));
+//        Serial.print(F(" - "));
+//        PS3.printStatusString();
       }
     }
     if (printAngle) {
@@ -340,11 +348,15 @@ void loop() {
       adjustBrightness();
    } else if (PS3.getButtonPress(TRIANGLE)) {
       adjustMoodSpeed();
+   } else if (effectMap[STROBE]) {
+      strobe();
+   } else if (PS3.getButtonPress(MOVE)){
+     adjustMoodColor();
    }
    
 
    if (effectMap[MOOD]){
-      moodLights();
+      moodLights(false, -1);
    }
   }
 #endif
@@ -363,6 +375,7 @@ void toggleEffect(String effect) {
   } else if (effect == "MOOD"){
     val = effectMap[MOOD];
     effectMap[MOOD] = (val) ? false : true;
+    (!val) ? PS3.moveSetBulb(Green) : PS3.moveSetBulb(Off);
     Serial.print("MOOD LIGHT TOGGLE: ");
     Serial.println(val);
   } else if (effect == "MOOD_SPEED"){
@@ -371,6 +384,17 @@ void toggleEffect(String effect) {
     val = effectMap[MOOD_SPEED];
     effectMap[MOOD_SPEED] = (val) ? false : true;
     Serial.print("MOOD SPEED TOGGLE: ");
+    Serial.println(val);
+  } else if (effect == "STROBE"){
+    val = effectMap[STROBE];
+    effectMap[STROBE] = (val) ? false : true;
+    (!val) ? PS3.moveSetBulb(White) : PS3.moveSetBulb(Off);
+    Serial.print("STROBE TOGGLE: ");
+    Serial.println(val);
+  } else if (effect == "ADJUST_MOOD_COLOR"){
+    val = effectMap[ADJUST_MOOD_COLOR];
+    effectMap[ADJUST_MOOD_COLOR] = (val) ? false : true;
+    Serial.print("ADJUST_MOOD_COLOR TOGGLE: ");
     Serial.println(val);
   } else {
     Serial.println("Effect Not Found: " + effect); 
@@ -385,6 +409,7 @@ void toggleFeature(String feature) {
   if (feature == "BLACK_OUT") {
     val = featureMap[BLACK_OUT];
     featureMap[BLACK_OUT] = (val) ? false : true;
+    blackOut(val);
   } else if (feature == "IMPACT") {
     val = featureMap[IMPACT];
     featureMap[IMPACT] = (val) ? false : true;
@@ -496,30 +521,38 @@ void purple() {
   setRGB(device, 100, 20, 200, false, false);
 }
 
-void moodLights() {
+// forward - Direction of lights
+// speed - A local speed of the mood lights, set < 0 to disable.
+void moodLights(boolean forward, float speed) {
   int r = 0;
   int g = 0;
   int b = 0;
-
+  float localSpeed = (speed < 0) ? moodSpeed : speed;
+  Serial.print("speed :");
+  Serial.println(localSpeed);
+  
   if (currentMoodColor[0] >= nextMoodColor[0]) {
-    r = map(changeMoodValue, 0, MAX_MOOD_VALUE, nextMoodColor[0], currentMoodColor[0]);
+    r = map(changeMoodValue, 0, MOOD_MAX_VALUE, nextMoodColor[0], currentMoodColor[0]);
+    if (!forward) {r = nextMoodColor[0] + (currentMoodColor[0] - r);}
   } else {
-    r = map(changeMoodValue, 0, MAX_MOOD_VALUE, currentMoodColor[0], nextMoodColor[0]);  //c = 10, n = 20  20,19,18   n-c = 10; + n-r
-    r = currentMoodColor[0] + (nextMoodColor[0] - r);
+    r = map(changeMoodValue, 0, MOOD_MAX_VALUE, currentMoodColor[0], nextMoodColor[0]);  //c = 10, n = 20  20,19,18   n-c = 10; + n-r
+    if (forward) {r = currentMoodColor[0] + (nextMoodColor[0] - r);}
   }
 
   if (currentMoodColor[1] >= nextMoodColor[1]) {
-    g = map(changeMoodValue, 0, MAX_MOOD_VALUE, nextMoodColor[1], currentMoodColor[1]);
+    g = map(changeMoodValue, 0, MOOD_MAX_VALUE, nextMoodColor[1], currentMoodColor[1]);
+    if (!forward) {g = nextMoodColor[1] + (currentMoodColor[1] - g);}
   } else {
-    g = map(changeMoodValue, 0, MAX_MOOD_VALUE, currentMoodColor[1], nextMoodColor[1]);  //c = 10, n = 20  20,19,18   n-c = 10; + n-r
-    g = currentMoodColor[1] + (nextMoodColor[1] - g);
+    g = map(changeMoodValue, 0, MOOD_MAX_VALUE, currentMoodColor[1], nextMoodColor[1]);  //c = 10, n = 20  20,19,18   n-c = 10; + n-r
+    if (forward) {g = currentMoodColor[1] + (nextMoodColor[1] - g);}
   }
 
   if (currentMoodColor[2] >= nextMoodColor[2]) {
-    b = map(changeMoodValue, 0, MAX_MOOD_VALUE, nextMoodColor[2], currentMoodColor[2]);
+    b = map(changeMoodValue, 0, MOOD_MAX_VALUE, nextMoodColor[2], currentMoodColor[2]);
+    if (!forward) {b = nextMoodColor[2] + (currentMoodColor[2] - b);}
   } else {
-    b = map(changeMoodValue, 0, MAX_MOOD_VALUE, currentMoodColor[2], nextMoodColor[2]);  //c = 10, n = 20  20,19,18   n-c = 10; + n-r
-    b = currentMoodColor[2] + (nextMoodColor[2] - b);
+    b = map(changeMoodValue, 0, MOOD_MAX_VALUE, currentMoodColor[2], nextMoodColor[2]);  //c = 10, n = 20  20,19,18   n-c = 10; + n-r
+    if (forward) {b = currentMoodColor[2] + (nextMoodColor[2] - b);}
   }
 //  Serial.print("Mood Light Colors: ");
 //  Serial.print(r);
@@ -530,20 +563,37 @@ void moodLights() {
 
   setRGB(device, r, g, b, false, false);
   
-  changeMoodValue -= moodSpeed;
-  if (changeMoodValue <= 0) {
-    moodColorChange();
+  if (forward) {changeMoodValue -= localSpeed;}
+  else {changeMoodValue += localSpeed;}
+
+  if (changeMoodValue >= MOOD_MAX_VALUE) {
+    moodColorChange(false);
+  } else if (changeMoodValue <= 0) {
+    moodColorChange(true);
   }
 }
 
-void moodColorChange() {
-  colorIndex ++;
-  if (colorIndex > COLOR_MAX_INDEX){
-    colorIndex = 0;
+// forward indicates the direction in which to change the lights
+void moodColorChange(boolean forward) {
+  int nextColorIndex = 0;
+  
+  if (forward) {
+    colorIndex ++;
+    if (colorIndex > COLOR_MAX_INDEX){
+      colorIndex = 0;
+    }
+    changeMoodValue = MOOD_MAX_VALUE - 1;
+    nextColorIndex = colorIndex + 1;
+    if (nextColorIndex > COLOR_MAX_INDEX) {nextColorIndex = 0;}
+  } else {
+    colorIndex --;
+    if (colorIndex < 0){
+      colorIndex = COLOR_MAX_INDEX;
+    }
+    changeMoodValue = 1;
+    nextColorIndex = colorIndex - 1;
+    if (nextColorIndex < 0) {nextColorIndex = COLOR_MAX_INDEX;}
   }
-
-  int nextColorIndex = colorIndex + 1;
-  if (nextColorIndex > COLOR_MAX_INDEX) {nextColorIndex = 0;}
   
   currentMoodColor[0] = colorMap[colorIndex][0];
   currentMoodColor[1] = colorMap[colorIndex][1];
@@ -557,8 +607,14 @@ void moodColorChange() {
   diffMoodColor[1] = nextMoodColor[1] - currentMoodColor[1];
   diffMoodColor[2] = nextMoodColor[2] - currentMoodColor[2];
 
-  changeMoodValue = MAX_MOOD_VALUE;
-  Serial.print("Color Change To: ");
+  Serial.print("Current Mood Color: ");
+  Serial.print(currentMoodColor[0]);
+  Serial.print(", ");
+  Serial.print(currentMoodColor[1]);
+  Serial.print(", ");
+  Serial.println(currentMoodColor[2]);
+  
+  Serial.print("Next Mood Color: ");
   Serial.print(nextMoodColor[0]);
   Serial.print(", ");
   Serial.print(nextMoodColor[1]);
@@ -584,7 +640,61 @@ void adjustMoodSpeed() {
   Serial.print("Mood Speed: ");
   Serial.println(newMoodSpeed);
   moodSpeed = newMoodSpeed;
+
+  // Change Bulb light off and on depending on moodSpeed
+  // 0.5 keeps it from not blinking
+  // Visual Representation
+  bulbIndex -= (moodSpeed*2);
+  Serial.print("Bulb: ");
+  Serial.println(bulbIndex);
+  if (bulbIndex <= 0){
+    if (bulbOn) {
+      PS3.moveSetBulb(Off);
+      bulbOn = false;
+    } else {
+      PS3.moveSetBulb(Blue);
+      bulbOn = true;
+    }
+    bulbIndex = BULB_MAX_VALUE;
+  }
 }
+
+void strobe() {
+  if (strobeDelayIndex <= 0){
+    if (strobeLightOn) {
+      setRGB(device, 0, 0, 0, false, false);
+      strobeDelayIndex = strobeOffDelay;
+      strobeLightOn = false;
+    } else {
+      setRGB(device, STROBE_MAX_BRIGHTNESS, STROBE_MAX_BRIGHTNESS, STROBE_MAX_BRIGHTNESS, false, false);
+      strobeDelayIndex = strobeOnDelay;
+      strobeLightOn = true;
+    }
+  }
+  strobeDelayIndex --;
+}
+
+
+void adjustMoodColor() {
+  int roll = int(PS3.getAngle(Roll));
+  int diff = roll - int(initCtrlAngle);
+  // Smooths out output
+  int near = diff % 4;
+  diff -= near;
+
+  int deltaDiff = 0;
+
+  if (diff < globalDiff) {
+    deltaDiff = globalDiff - diff;
+    moodLights(false, deltaDiff*adjustMoodMul);
+  } else if (diff > globalDiff){
+    deltaDiff = diff - globalDiff;
+    moodLights(true, deltaDiff*adjustMoodMul);
+  }
+
+  globalDiff = diff;
+}
+
 
 void orange() {
   
