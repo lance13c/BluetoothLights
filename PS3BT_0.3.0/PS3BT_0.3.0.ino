@@ -57,7 +57,7 @@ float brightnessMul = 1.0;      // Brightness Multiplier
 float tempBrightnessMul = brightnessMul;  // Temp brightness multiplyer for brightness changes;
 
 // PS3 Bulb
-float BULB_MAX_VALUE = 50;
+float BULB_MAX_VALUE = 25;
 float bulbIndex = BULB_MAX_VALUE;
 boolean bulbOn = false;         // Whether the bulb is on or off
 
@@ -68,9 +68,27 @@ float strobeOffDelay = 280;
 float strobeDelayIndex = strobeOnDelay;
 int STROBE_MAX_BRIGHTNESS = 200;
 
+//IMPACT
+float preRoll = 0.0;
+float prePitch = 0.0;
+
+float curRoll = 0.0;
+float curPitch = 0.0;
+
+float preAccRoll = 0.0;
+float preAccPitch = 0.0;
+
+float curAccRoll = 0.0;
+float curAccPitch = 0.0;
+
+float jerkRoll = 0.0;
+float jerkPitch = 0.0;
+
+float impactThresholds[] = {10.0,20.0,80.0,100.0};
+
 // ADJUST MOOD
 float globalDiff = 0.0;
-float adjustMoodMul = 30;  // Speed Multiplier for manually adjusting the color
+float adjustMoodMul = 5;  // Speed Multiplier for manually adjusting the color
 
 // MOOD LIGHT VARS
 float moodSpeed = 0.5;
@@ -108,7 +126,7 @@ int nextMoodColor[3] = {
 
 int diffMoodColor[3] = {0, 0, 0}; // Difference between current and next mood colors
 
-float MOOD_MAX_VALUE = 1500;
+float MOOD_MAX_VALUE = 100;
 float changeMoodValue = MOOD_MAX_VALUE;
 
 #define C_RED 0
@@ -167,7 +185,7 @@ void setup() {
   Serial.begin(115200);
 
   //TEST AREA
-  device = DEVICE_TEST;
+  device = DEVICE_CTRL;
   toggleFeature("BLACK_OUT");
 
   //setRGBTests();
@@ -299,7 +317,7 @@ void loop() {
     else {
       if (PS3.getButtonClick(SELECT)) {
         Serial.print(F("\r\nSelect"));
-        printTemperature = !printTemperature;
+        //printTemperature = !printTemperature;
       }
       if (PS3.getButtonClick(START)) {
         Serial.print(F("\r\nStart"));
@@ -353,6 +371,8 @@ void loop() {
    } else if (PS3.getButtonPress(MOVE)){
      adjustMoodColor();
    }
+
+   //impact();
    
 
    if (effectMap[MOOD]){
@@ -454,6 +474,11 @@ String setRGB(String device, int r, int g, int b, boolean overrideLock, boolean 
       analogWrite(TEST_B_PIN, (int)localB);
       return "Device Test";
     } else if (device == DEVICE_CTRL) {
+      Driver.begin(); // begin
+      Driver.SetColor((int)localR, (int)localG, (int)localB); //Red. first node data
+      Driver.SetColor((int)localR, (int)localG, (int)localB); //Blue. second node data
+      Driver.SetColor((int)localR, (int)localG, (int)localB); //Blue. second node data
+      Driver.end();
       return "Device Ctrl";
     } else {
       return "No device found";
@@ -693,6 +718,52 @@ void adjustMoodColor() {
   }
 
   globalDiff = diff;
+}
+
+// increses the brightness briefly when acceleration of Roll or Pitch increases
+void impact(){
+  preRoll = curRoll;
+  curRoll = PS3.getAngle(Roll);
+
+  preAccRoll = curAccRoll;
+  curAccRoll = curRoll - preRoll;
+
+  if (abs(curAccRoll) > impactThresholds[3]){
+    //Serial.print("Acceleration Roll: ");
+    //Serial.println(curAccRoll);
+  }
+  
+
+  jerkRoll = curAccRoll - preAccRoll;
+  if (abs(jerkRoll) > impactThresholds[3]){
+    Serial.print("Jerk Roll: ");
+    Serial.println(jerkRoll);
+  }
+
+
+  prePitch = curPitch;
+  curPitch = PS3.getAngle(Pitch);
+
+  preAccPitch = curAccPitch;
+  curAccPitch = curPitch - prePitch;
+
+  if (abs(curAccPitch) > impactThresholds[3]){
+    //Serial.print("Acceleration Roll: ");
+    //Serial.println(curAccRoll);
+  }
+  
+
+  jerkPitch = curAccPitch - preAccPitch;
+  if (abs(jerkPitch) > impactThresholds[3] && abs(jerkRoll) > impactThresholds[3]){
+    Serial.print("Jerk Pitch, Roll: ");
+    Serial.println(jerkPitch);
+    Serial.print(", ");
+    Serial.println(jerkRoll);
+  }
+
+
+  
+  
 }
 
 
