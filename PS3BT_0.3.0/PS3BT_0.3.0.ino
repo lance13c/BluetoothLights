@@ -63,6 +63,7 @@ boolean bulbOn = false;         // Whether the bulb is on or off
 
 // Strobe
 boolean strobeLightOn = false;
+boolean strobeAfterCheck = false;   // Allows a one time run after the stobe ends.    
 float strobeOnDelay = 20;
 float strobeOffDelay = 280;
 float strobeDelayIndex = strobeOnDelay;
@@ -321,7 +322,8 @@ void loop() {
       }
       if (PS3.getButtonClick(START)) {
         Serial.print(F("\r\nStart"));
-        toggleEffect("STROBE");
+        //toggleEffect("STROBE");
+        toggleEffect("MOOD");
       }
       if (PS3.getButtonClick(TRIANGLE)) {
         toggleEffect("MOOD_SPEED");
@@ -339,7 +341,7 @@ void loop() {
       }
       if (PS3.getButtonClick(CROSS)) {
         Serial.print(F("\r\nCross"));
-        toggleEffect("MOOD");
+        //toggleEffect("MOOD");
       }
       if (PS3.getButtonClick(MOVE)) {        
 //        PS3.moveSetBulb(Off);
@@ -366,10 +368,23 @@ void loop() {
       adjustBrightness();
    } else if (PS3.getButtonPress(TRIANGLE)) {
       adjustMoodSpeed();
-   } else if (effectMap[STROBE]) {
-      strobe();
-   } else if (PS3.getButtonPress(MOVE)){
+   }else if (PS3.getButtonPress(MOVE)){
      adjustMoodColor();
+   }
+
+//   else if (effectMap[STROBE]) {
+//      strobe();
+//   } 
+
+   if (PS3.getButtonPress(CROSS)){
+     setTempRGB(masterRGB[0], masterRGB[1], masterRGB[2]);
+     strobeAfterCheck = true;
+     strobe();
+   } else {
+    if (strobeAfterCheck) {
+      strobeAfterCheck = false;
+      setRGB(device, tempRGB[0], tempRGB[1], tempRGB[2], false, false); 
+    }
    }
 
    //impact();
@@ -540,6 +555,12 @@ void setCurrentRGB(int r, int g, int b){
   currentRGB[0] = r;
   currentRGB[1] = g;
   currentRGB[2] = b;
+}
+
+void setTempRGB(int r, int g, int b){
+  tempRGB[0] = r;
+  tempRGB[1] = g;
+  tempRGB[2] = b;
 }
 
 void purple() {
